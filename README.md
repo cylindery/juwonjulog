@@ -141,3 +141,83 @@ class PostControllerTest {
 }
 ```
 
+
+
+## 데이터 검증
+
+앞서 컨트롤러로 넘기는 json 데이터가 값이 누락되거나, 모종의 이유로 db에 저장될 때 오류가 발생할 수 있다.  
+그러므로 컨트롤러로 넘기기 전 단계에서 미리 데이터 검증 단계를 추가하면, db에 저장할 때 프로세스의 안정감을 줄 수 있다.  
+그리고 데이터 검증에서 에러가 발생했다면 어떤 에러인지 알 수 있게 json 타입으로 담아, Response Body에 넣어보자.
+
+- Spring Boot Validation 라이브러리의 @Blank를 이용해 title 값이 null 또는 공백 데이터 체크
+
+```java
+@Getter
+@Setter
+@ToString
+public class PostCreate {
+
+    @NotBlank
+    private String title;
+
+    @NotBlank
+    private String content;
+
+}
+```
+
+Spring Boot 버전이 높아짐에 따라, Spring Boot Validation을 dependencies에 추가해야 한다.
+
+```
+implementation 'org.springframework.boot:spring-boot-starter-validation'
+```
+
+- @Valid로 검증. 에러 발생 시, BindingResult로 가져온 에러 내용을 json 데이터로 에러 메시지 넘기기
+
+```java
+@Slf4j
+@RestController
+public class PostController {
+
+    // 글 등록
+    // POST Method
+    @PostMapping("/posts")
+    public Map<String, String> post(@RequestBody @Valid PostCreate params, BindingResult result) {
+        if (result.hasErrors()) {
+            List<FieldError> fieldErrors = result.getFieldErrors();
+            FieldError firstFieldError = fieldErrors.get(0);
+            String fieldName = firstFieldError.getField(); // 타이틀
+            String errorMessage = firstFieldError.getDefaultMessage(); // 에러 메시지
+
+            Map<String, String> error = new HashMap<>();
+            error.put(fieldName, errorMessage);
+            return error;
+        }
+
+        return Map.of();
+    }
+
+}
+```
+
+- 테스트 케이스. jsonPath 표현식 사용
+
+```java
+@WebMvcTest
+class PostControllerTest {
+    
+    @Test
+    @DisplayName("/posts에 POST 요청 시 title 값이 null 또는 공백이면, json 에러 데이터를 출력해야 한다.")
+    void postTest2() throws Exception {
+        mockMvc.perform(post("/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\": null, \"content\": \"글 내용...\"}")
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("타이틀을 입력해주세요."))
+                .andDo(print());
+    }
+    
+}
+```
+
