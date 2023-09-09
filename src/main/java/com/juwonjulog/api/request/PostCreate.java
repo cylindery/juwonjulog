@@ -1,4 +1,4 @@
-package com.juwonjulog.api.controller.request;
+package com.juwonjulog.api.request;
 
 import lombok.Getter;
 import lombok.Setter;
