@@ -221,3 +221,97 @@ class PostControllerTest {
 }
 ```
 
+### 응답 클래스와 @ControllerAdvice를 통한 데이터 검증
+
+현재 컨트롤러에 적용된 데이터 검증은 새로운 메서드가 추가될 때마다 매번 적용해줘야 하고, 또 동시에 여러개의 에러가 터졌을 때 대처하기도 힘들다.  
+게다가 응답값을 HashMap을 사용하고 있는데 이보다는 따로 응답 클래스를 만들어주면서, @ControllerAdvice를 통해 예외처리를 분리/통합 해보자.
+
+- 예외 응답 클래스 ErroResponse. json 형태로 에러에 대한 정보를 담는다
+  - code: 예외 코드
+  - message: 예외 메시지
+  - validation: 구체적으로 어떤 필드가 잘못됐는지 설명
+
+```java
+package com.juwonjulog.api.response;
+
+@Getter
+@RequiredArgsConstructor
+public class ErrorResponse {
+
+    private final String code;
+    private final String message;
+    private final Map<String, String> validation = new HashMap<>();
+
+    public void addValidation(String fieldName, String errorMessage) {
+        this.validation.put(fieldName, errorMessage);
+    }
+}
+```
+
+- 모든 컨트롤러 전역에서 발생할 수 있는 예외를 처리할 수 있는 ExceptionController 클래스
+
+```java
+package com.juwonjulog.api.controller;
+
+@Slf4j
+@ControllerAdvice
+public class ExceptionController {
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseBody
+    public ErrorResponse invalidRequestHandler(MethodArgumentNotValidException e) {
+        ErrorResponse response = new ErrorResponse("400", "잘못된 요청입니다.");
+
+        for (FieldError fieldError : e.getFieldErrors()) {
+            response.addValidation(fieldError.getField(), fieldError.getDefaultMessage());
+        }
+
+        return response;
+    }
+
+}
+```
+
+현재 title에 null 값이 들어올 시 발생하는 MethodArgumentNotValidException을 @ExceptionHandler을 통해 캐치한다.  
+그리고 이렇게 잡히는 에러에 대해 @ResponseStatus로 Http 400 에러를 리턴하고, @ResponseBody로 에러 정보 HttpResponse Body에 삽입
+
+- ExceptionContoller로 예외를 처리할 수 있도록 PostController 수정. 이전의 BindingResult 삭제
+
+```java
+@Slf4j
+@RestController
+public class PostController {
+
+    @PostMapping("/posts")
+    public Map<String, String> post(@RequestBody @Valid PostCreate params) {
+        return Map.of();
+    }
+
+}
+```
+
+- 테스트 케이스
+
+```java
+@WebMvcTest
+class PostControllerTest {
+    
+    @Test
+    @DisplayName("/posts에 POST 요청 시 title 값이 null 또는 공백이면, json 에러 객체를 출력한다.")
+    void postTest2() throws Exception {
+        // expected
+        mockMvc.perform(post("/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\": null, \"content\": \"글 내용...\"}")
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"))
+                .andExpect(jsonPath("$.message").value("잘못된 요청입니다."))
+                .andExpect(jsonPath("$.validation.title").value("타이틀을 입력해주세요."))
+                .andDo(print());
+    }
+
+}
+```
+
