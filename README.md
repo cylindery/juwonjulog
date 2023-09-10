@@ -409,7 +409,7 @@ public class PostController {
 
 서비스를 주입받아 게시글 저장 서비스 호출.
 
-- 테스트 케이스
+- 컨트롤러 테스트 케이스
 
 ```java
 @AutoConfigureMockMvc
@@ -449,4 +449,153 @@ class PostControllerTest {
 컨트롤러 - 서비스 - 레포지토리에 이르는 api 전반적 테스트를 하기 위해, @WebMvcTest에서 @SpringBootTest 수정. 그런데 @SpringBootTest 애노테이션만으로는 MockMvc를 빈에 등록할 수 없어서 @AutoConfigureMockMvc 추가.  
 또한 각각의 테스트가 다른 테스트에 영향가지 않도록 @BeforeEach 메서드까지 추가.  
 게시글 저장 시, DB에 1개의 row 데이터 저장 확인.
+
+- 서비스 테스트 케이스
+
+```java
+@SpringBootTest
+class PostServiceTest {
+
+    @Autowired
+    private PostService postService;
+
+    @Autowired
+    private PostRepository postRepository;
+
+    @BeforeEach
+    void clean() {
+        postRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("글 작성 요청 시 DB에 Post 데이터 저장")
+    void save_post_to_db_when_write() {
+        // given
+        PostCreate postCreate = PostCreate.builder()
+                .title("글 제목")
+                .content("글 내용...")
+                .build();
+
+        // when
+        postService.write(postCreate);
+
+        // then
+        assertEquals(1L, postRepository.count());
+        Post post = postRepository.findAll().get(0);
+        assertEquals("글 제목", post.getTitle());
+        assertEquals("글 내용...", post.getContent());
+    }
+}
+```
+
+
+
+## 게시글 조회
+
+### 단건 조회
+
+게시글을 저장하는 기능을 만들었으니, 게시글을 조회하는 기능도 추가해보자.  
+게시글 조회는 크게 두 가지가 존재한다. 여러 개의 게시글을 한번에 조회하는 기능과 글 1개만 조회하는 기능.  
+우선 특정 게시글만 가져오는 단건 조회 기능을 만들어보자.
+
+- PostService.get(Long postId): 게시글 번호를 통한 조회 기능
+
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PostService {
+    
+    public Post get(Long postId) {
+        return postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 글입니다."));
+    }
+}
+```
+
+`findById(postId)`로 가져온 Optional 객체에 대해 게시글이 없으면 예외 처리.
+
+- PostController.get(Long postId)
+
+```java
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+public class PostController {
+
+    @GetMapping("/posts/{postId}")
+    public Post get(@PathVariable Long postId) {
+        return postService.get(postId);
+    }
+}
+```
+
+조회한 게시글을 json 타입으로 반환.
+
+- 서비스 테스트 케이스
+
+```java
+@SpringBootTest
+class PostServiceTest {
+
+    @Test
+    @DisplayName("DB에 존재하지 않는 글 1개 조회 시 예외 출력")
+    void get_not_exist_post() {
+        // given
+        Long postId = 1L;
+        
+        // expected
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> postService.get(postId));
+        assertEquals("존재하지 않는 글입니다.", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("DB에 저장된 글 1개 조회")
+    void get_post_saved_in_db() {
+        // given
+        Post savedPost = Post.builder()
+                .title("글 제목")
+                .content("글 내용...")
+                .build();
+        postRepository.save(savedPost);
+
+        // when
+        Post post = postService.get(savedPost.getId());
+
+        // then
+        assertNotNull(post);
+        assertEquals("글 제목", post.getTitle());
+        assertEquals("글 내용...", post.getContent());
+    }
+}
+```
+
+- 컨트롤러 테스트 케이스
+
+```java
+@AutoConfigureMockMvc
+@SpringBootTest
+class PostControllerTest {
+
+    @Test
+    @DisplayName("/posts/{postId}에 get 요청 시 글 1개 조회")
+    void get_1_post() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("글 제목")
+                .content("글 내용...")
+                .build();
+        postRepository.save(post);
+
+        // expected
+        mockMvc.perform(get("/posts/{postId}", post.getId())
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(post.getId()))
+                .andExpect(jsonPath("$.title").value("글 제목"))
+                .andExpect(jsonPath("$.content").value("글 내용..."))
+                .andDo(print());
+    }
+}
+```
 
