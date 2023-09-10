@@ -315,3 +315,138 @@ class PostControllerTest {
 }
 ```
 
+
+
+## 작성글 저장
+
+### 게시글 저장 구현
+
+본격적으로 게시글을 저장하는 기능을 지원하는 서비스, 그리고 게시글이 저장되는 데이터베이스까지 구현해보자.  
+'POST 컨트롤러 -> 게시글 저장 서비스 호출 -> 레포지토리 호출' 구조를 가질 것.
+
+- Post 엔티티
+
+```java
+package com.juwonjulog.api.domain;
+
+@Getter
+@Entity
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Post {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String title;
+
+    @Lob
+    private String content;
+
+    public Post(String title, String content) {
+        this.title = title;
+        this.content = content;
+    }
+
+}
+
+```
+
+엔티티의 id 생성 전략은 Identity. 그리고 게시글을 DB에 저장할 때, 글 내용은 큰 데이터를 저장할 수 있도록 @Lob 설정.
+
+- PostRepository. 레포지토리
+
+```java
+package com.juwonjulog.api.repository;
+
+public interface PostRepository extends JpaRepository<Post, Long> {
+}
+```
+
+- PostService. 서비스
+
+```java
+package com.juwonjulog.api.service;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PostService {
+
+    private final PostRepository postRepository;
+
+    public void write(PostCreate postCreate) {
+        Post post = new Post(postCreate.getTitle(), postCreate.getContent());
+        postRepository.save(post);
+    }
+
+}
+```
+
+컨트롤러에서 글을 저장할 때 PostService의 write()를 호출하면, 넘겨받은 PostCreate를 Post 엔티티로 변환해서 주입받은 레포지토리에 저장한다.
+
+- PostController
+
+```java
+package com.juwonjulog.api.controller;
+
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+public class PostController {
+
+    private final PostService postService;
+
+    @PostMapping("/posts")
+    public Map<String, String> post(@RequestBody @Valid PostCreate request) {
+        postService.write(request);
+        return Map.of();
+    }
+
+}
+
+```
+
+서비스를 주입받아 게시글 저장 서비스 호출.
+
+- 테스트 케이스
+
+```java
+@AutoConfigureMockMvc
+@SpringBootTest
+class PostControllerTest {
+    
+    @Autowired
+    private PostRepository postRepository;
+
+    @BeforeEach
+    void clean() {
+        postRepository.deleteAll();
+    }
+    
+    @Test
+    @DisplayName("/posts에 POST 요청 시 DB에 Post 1개 저장")
+    void postTest3() throws Exception {
+        // when
+        mockMvc.perform(post("/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\": \"글 제목\", \"content\": \"글 내용...\"}")
+                )
+                .andExpect(status().isOk())
+                .andDo(print());
+
+        // then
+        assertEquals(1L, postRepository.count());
+
+        Post post = postRepository.findAll().get(0);
+        assertEquals("글 제목", post.getTitle());
+        assertEquals("글 내용...", post.getContent());
+    }
+    
+}
+```
+
+컨트롤러 - 서비스 - 레포지토리에 이르는 api 전반적 테스트를 하기 위해, @WebMvcTest에서 @SpringBootTest 수정. 그런데 @SpringBootTest 애노테이션만으로는 MockMvc를 빈에 등록할 수 없어서 @AutoConfigureMockMvc 추가.  
+또한 각각의 테스트가 다른 테스트에 영향가지 않도록 @BeforeEach 메서드까지 추가.  
+게시글 저장 시, DB에 1개의 row 데이터 저장 확인.
+
