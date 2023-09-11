@@ -3,6 +3,7 @@ package com.juwonjulog.api.service;
 import com.juwonjulog.api.domain.Post;
 import com.juwonjulog.api.repository.PostRepository;
 import com.juwonjulog.api.request.PostCreate;
+import com.juwonjulog.api.response.PostResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,11 +67,11 @@ class PostServiceTest {
         postRepository.save(savedPost);
 
         // when
-        Post post = postService.get(savedPost.getId());
+        PostResponse response = postService.get(savedPost.getId());
 
         // then
-        assertNotNull(post);
-        assertEquals("글 제목", post.getTitle());
-        assertEquals("글 내용...", post.getContent());
+        assertNotNull(response);
+        assertEquals("글 제목", response.getTitle());
+        assertEquals("글 내용...", response.getContent());
     }
 }

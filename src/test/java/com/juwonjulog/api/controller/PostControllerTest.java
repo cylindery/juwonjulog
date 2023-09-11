@@ -123,4 +123,36 @@ class PostControllerTest {
                 .andExpect(jsonPath("$.content").value("글 내용..."))
                 .andDo(print());
     }
+
+    @Test
+    @DisplayName("/posts/{postId}에 get 요청 시 title 길이는 최대 10")
+    void title_max_length_is_10() throws Exception {
+        // given
+        Post postLong = Post.builder()
+                .title("123456789012345")
+                .content("글 내용...")
+                .build();
+        postRepository.save(postLong);
+
+        Post postShort = Post.builder()
+                .title("12345")
+                .content("글 내용...")
+                .build();
+        postRepository.save(postShort);
+
+        // expected
+        mockMvc.perform(get("/posts/{postId}", postLong.getId())
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(postLong.getId()))
+                .andExpect(jsonPath("$.title").value("1234567890"))
+                .andDo(print());
+
+        mockMvc.perform(get("/posts/{postId}", postShort.getId())
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(postShort.getId()))
+                .andExpect(jsonPath("$.title").value("12345"))
+                .andDo(print());
+    }
 }
