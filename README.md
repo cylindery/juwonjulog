@@ -599,3 +599,95 @@ class PostControllerTest {
 }
 ```
 
+### 게시글 조회 응답 클래스 분리
+
+현재 PostController에서 게시글을 조회할 때는, PostService에서 받은 Post 엔티티를 json 형태로 리턴하고 있다.  
+여기에 title 값에 글자 수 제한을 줘야하는 기능을 추가해보자.
+
+그런데 이후에 다른 컨트롤러가 추가되고, 그 컨트롤러에서의 조회는 현재 PostController 글자 수 제한과 정책이 달라질 수 있다.  
+따라서 엔티티 자체에 글자 수 제한이 들어가는 서비스 정책을 넣는 것은 굉장히 위험하다.  
+따라서 서비스 정책에 맞는 응답 클래스를 따로 분리하자.
+
+- 게시글의 title이 10글자 이하여야 하는 서비스의 응답 클래스
+
+```java
+package com.juwonjulog.api.response;
+
+@Getter
+public class PostResponse {
+
+    private final Long id;
+    private final String title;
+    private final String content;
+
+    @Builder
+    public PostResponse(Long id, String title, String content) {
+        this.id = id;
+        this.title = title.substring(0, Math.min(title.length(), 10));
+        this.content = content;
+    }
+}
+```
+
+컨트롤러와 서비스에서 응답값 수정. 그리고 서비스 단계에서 이전의 Post 엔티티를 PostCreate 객체로 변환.
+
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PostService {
+    
+    public PostResponse get(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 글입니다."));
+
+        return PostResponse.builder()
+                .id(post.getId())
+                .title(post.getTitle())
+                .content(post.getContent())
+                .build();
+    }
+}
+```
+
+- 컨트롤러 테스트 케이스. title 10글자 제한
+
+```java
+@AutoConfigureMockMvc
+@SpringBootTest
+class PostControllerTest {
+    
+    @Test
+    @DisplayName("/posts/{postId}에 get 요청 시 title 길이는 최대 10")
+    void title_max_length_is_10() throws Exception {
+        // given
+        Post postLong = Post.builder()
+                .title("123456789012345")
+                .content("글 내용...")
+                .build();
+        postRepository.save(postLong);
+
+        Post postShort = Post.builder()
+                .title("12345")
+                .content("글 내용...")
+                .build();
+        postRepository.save(postShort);
+
+        // expected
+        mockMvc.perform(get("/posts/{postId}", postLong.getId())
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(postLong.getId()))
+                .andExpect(jsonPath("$.title").value("1234567890"))
+                .andDo(print());
+
+        mockMvc.perform(get("/posts/{postId}", postShort.getId())
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(postShort.getId()))
+                .andExpect(jsonPath("$.title").value("12345"))
+                .andDo(print());
+    }
+}
+```
+
