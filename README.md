@@ -1,7 +1,5 @@
 # juwonjulog
 
-
-
 ## 프로젝트 생성
 
 ### 프로젝트 환경
@@ -25,8 +23,6 @@
     - Tomcat started on port(s): 8080 (http) with context path '' 로그 확인
     - 웹 브라우저에서 http://localhost:8080/ 접속. 404 에러 확인
 
-
-
 ## POST 컨트롤러 생성
 
 기본적인 컨트롤러를 사용하기보다는, JSON 형태로 데이터 응답처리를 하는 api를 만드는 것이 목표.  
@@ -35,6 +31,7 @@
 - GET 메서드를 사용하여 간단히 "Hello World" String을 리턴하도록 라우팅
 
 ```java
+
 @RestController
 public class PostController {
 
@@ -42,13 +39,14 @@ public class PostController {
     public String get() {
         return "Hello World";
     }
-    
+
 }
 ```
 
 - 테스트 케이스 작성. 확인
 
 ```java
+
 @WebMvcTest
 class PostControllerTest {
 
@@ -105,6 +103,7 @@ public class PostCreate {
 - 이전에 간단히 GET Method로 라우팅했던 기능을 POST Method로 수정. 파라미터로 가져온 params를 로그 출력
 
 ```java
+
 @Slf4j
 @RestController
 public class PostController {
@@ -123,6 +122,7 @@ public class PostController {
 - 테스트 케이스 작성. HttpRequest Body에 JSON 데이터({"title": "글 제목", "content": "글 내용..."}) 담아 보내기
 
 ```java
+
 @WebMvcTest
 class PostControllerTest {
 
@@ -141,8 +141,6 @@ class PostControllerTest {
 }
 ```
 
-
-
 ## 데이터 검증
 
 앞서 컨트롤러로 넘기는 json 데이터가 값이 누락되거나, 모종의 이유로 db에 저장될 때 오류가 발생할 수 있다.  
@@ -152,6 +150,7 @@ class PostControllerTest {
 - Spring Boot Validation 라이브러리의 @Blank를 이용해 title 값이 null 또는 공백 데이터 체크
 
 ```java
+
 @Getter
 @Setter
 @ToString
@@ -175,6 +174,7 @@ implementation 'org.springframework.boot:spring-boot-starter-validation'
 - @Valid로 검증. 에러 발생 시, BindingResult로 가져온 에러 내용을 json 데이터로 에러 메시지 넘기기
 
 ```java
+
 @Slf4j
 @RestController
 public class PostController {
@@ -203,9 +203,10 @@ public class PostController {
 - 테스트 케이스. jsonPath 표현식 사용
 
 ```java
+
 @WebMvcTest
 class PostControllerTest {
-    
+
     @Test
     @DisplayName("/posts에 POST 요청 시 title 값이 null 또는 공백이면, json 에러 데이터를 출력해야 한다.")
     void postTest2() throws Exception {
@@ -217,7 +218,7 @@ class PostControllerTest {
                 .andExpect(jsonPath("$.title").value("타이틀을 입력해주세요."))
                 .andDo(print());
     }
-    
+
 }
 ```
 
@@ -227,9 +228,9 @@ class PostControllerTest {
 게다가 응답값을 HashMap을 사용하고 있는데 이보다는 따로 응답 클래스를 만들어주면서, @ControllerAdvice를 통해 예외처리를 분리/통합 해보자.
 
 - 예외 응답 클래스 ErroResponse. json 형태로 에러에 대한 정보를 담는다
-  - code: 예외 코드
-  - message: 예외 메시지
-  - validation: 구체적으로 어떤 필드가 잘못됐는지 설명
+    - code: 예외 코드
+    - message: 예외 메시지
+    - validation: 구체적으로 어떤 필드가 잘못됐는지 설명
 
 ```java
 package com.juwonjulog.api.response;
@@ -279,6 +280,7 @@ public class ExceptionController {
 - ExceptionContoller로 예외를 처리할 수 있도록 PostController 수정. 이전의 BindingResult 삭제
 
 ```java
+
 @Slf4j
 @RestController
 public class PostController {
@@ -294,9 +296,10 @@ public class PostController {
 - 테스트 케이스
 
 ```java
+
 @WebMvcTest
 class PostControllerTest {
-    
+
     @Test
     @DisplayName("/posts에 POST 요청 시 title 값이 null 또는 공백이면, json 에러 객체를 출력한다.")
     void postTest2() throws Exception {
@@ -314,8 +317,6 @@ class PostControllerTest {
 
 }
 ```
-
-
 
 ## 작성글 저장
 
@@ -412,10 +413,11 @@ public class PostController {
 - 컨트롤러 테스트 케이스
 
 ```java
+
 @AutoConfigureMockMvc
 @SpringBootTest
 class PostControllerTest {
-    
+
     @Autowired
     private PostRepository postRepository;
 
@@ -423,7 +425,7 @@ class PostControllerTest {
     void clean() {
         postRepository.deleteAll();
     }
-    
+
     @Test
     @DisplayName("/posts에 POST 요청 시 DB에 Post 1개 저장")
     void postTest3() throws Exception {
@@ -442,17 +444,19 @@ class PostControllerTest {
         assertEquals("글 제목", post.getTitle());
         assertEquals("글 내용...", post.getContent());
     }
-    
+
 }
 ```
 
-컨트롤러 - 서비스 - 레포지토리에 이르는 api 전반적 테스트를 하기 위해, @WebMvcTest에서 @SpringBootTest 수정. 그런데 @SpringBootTest 애노테이션만으로는 MockMvc를 빈에 등록할 수 없어서 @AutoConfigureMockMvc 추가.  
+컨트롤러 - 서비스 - 레포지토리에 이르는 api 전반적 테스트를 하기 위해, @WebMvcTest에서 @SpringBootTest 수정. 그런데 @SpringBootTest 애노테이션만으로는 MockMvc를 빈에
+등록할 수 없어서 @AutoConfigureMockMvc 추가.  
 또한 각각의 테스트가 다른 테스트에 영향가지 않도록 @BeforeEach 메서드까지 추가.  
 게시글 저장 시, DB에 1개의 row 데이터 저장 확인.
 
 - 서비스 테스트 케이스
 
 ```java
+
 @SpringBootTest
 class PostServiceTest {
 
@@ -488,8 +492,6 @@ class PostServiceTest {
 }
 ```
 
-
-
 ## 게시글 조회
 
 ### 단건 조회
@@ -501,11 +503,12 @@ class PostServiceTest {
 - PostService.get(Long postId): 게시글 번호를 통한 조회 기능
 
 ```java
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PostService {
-    
+
     public Post get(Long postId) {
         return postRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 글입니다."));
@@ -518,6 +521,7 @@ public class PostService {
 - PostController.get(Long postId)
 
 ```java
+
 @Slf4j
 @RestController
 @RequiredArgsConstructor
@@ -535,6 +539,7 @@ public class PostController {
 - 서비스 테스트 케이스
 
 ```java
+
 @SpringBootTest
 class PostServiceTest {
 
@@ -543,7 +548,7 @@ class PostServiceTest {
     void get_not_exist_post() {
         // given
         Long postId = 1L;
-        
+
         // expected
         Throwable exception = assertThrows(IllegalArgumentException.class, () -> postService.get(postId));
         assertEquals("존재하지 않는 글입니다.", exception.getMessage());
@@ -573,6 +578,7 @@ class PostServiceTest {
 - 컨트롤러 테스트 케이스
 
 ```java
+
 @AutoConfigureMockMvc
 @SpringBootTest
 class PostControllerTest {
@@ -632,11 +638,12 @@ public class PostResponse {
 컨트롤러와 서비스에서 응답값 수정. 그리고 서비스 단계에서 이전의 Post 엔티티를 PostCreate 객체로 변환.
 
 ```java
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PostService {
-    
+
     public PostResponse get(Long postId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 글입니다."));
@@ -653,10 +660,11 @@ public class PostService {
 - 컨트롤러 테스트 케이스. title 10글자 제한
 
 ```java
+
 @AutoConfigureMockMvc
 @SpringBootTest
 class PostControllerTest {
-    
+
     @Test
     @DisplayName("/posts/{postId}에 get 요청 시 title 길이는 최대 10")
     void title_max_length_is_10() throws Exception {
@@ -689,5 +697,134 @@ class PostControllerTest {
                 .andDo(print());
     }
 }
+```
+
+### 여러개 조회
+
+게시글을 한번에 여러개 조회하는 api를 만들어보자.  
+단건 조회에서 Post 엔티티를 PostResponse 객체로 가져온 것과 달리, 여러개이므로 List<PostResponse> 형태로 가져와야 한다.
+
+- PostResponse 생성자 오버로딩. 서비스에서 Post 객체를 PostResponse 객체로 변환 과정에 도움
+
+```java
+
+@Getter
+public class PostResponse {
+
+    public PostResponse(Post post) {
+        this.id = post.getId();
+        this.title = post.getTitle();
+        this.content = post.getContent();
+    }
+}
+```
+
+- PostService.getList(): 리스트 형태로 모든 게시글을 PostResponse 객체로 반환
+
+```java
+public class PostService {
+
+    public List<PostResponse> getList() {
+        return postRepository.findAll().stream()
+                .map(PostResponse::new)
+                .collect(Collectors.toList());
+    }
+}
+```
+
+- PostController.getList(): "/posts" Http Get Method
+
+```java
+public class PostController {
+
+    @GetMapping("/posts")
+    public List<PostResponse> getList() {
+        return postService.getList();
+    }
+}
+```
+
+- 서비스 테스트 케이스
+
+```java
+class PostServiceTest {
+
+    @Test
+    @DisplayName("DB에 저장된 글 여러개 조회")
+    void get_posts_saved_in_db() {
+        // given
+        postRepository.saveAll(List.of(
+                Post.builder()
+                        .title("title_1")
+                        .content("content_1")
+                        .build(),
+                Post.builder()
+                        .title("title_2")
+                        .content("content_2")
+                        .build()
+        ));
+
+        // when
+        List<PostResponse> response = postService.getList();
+
+        // then
+        assertNotNull(response);
+        assertEquals(2L, response.size());
+    }
+}
+```
+
+- 컨트롤러 테스트 케이스
+
+```java
+class PostControllerTest {
+
+    @Test
+    @DisplayName("/posts에 getList 요청 시 글 여러개 조회")
+    void get_posts() throws Exception {
+        // given
+        Post savedPost1 = postRepository.save(Post.builder()
+                .title("title_1")
+                .content("content_1")
+                .build());
+
+        Post savedPost2 = postRepository.save(Post.builder()
+                .title("title_2")
+                .content("content_2")
+                .build());
+
+        // expected
+        mockMvc.perform(get("/posts")
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()", is(2)))
+                .andExpect(jsonPath("$[0].id").value(savedPost1.getId()))
+                .andExpect(jsonPath("$[0].title").value("title_1"))
+                .andExpect(jsonPath("$[0].content").value("content_1"))
+                .andExpect(jsonPath("$[1].id").value(savedPost2.getId()))
+                .andExpect(jsonPath("$[1].title").value("title_2"))
+                .andExpect(jsonPath("$[1].content").value("content_2"))
+                .andDo(print());
+    }
+}
+```
+
+한편 지금까지 만든 서비스는 DB가 메모리 방식이라 데이터가 남지 않았다.  
+웹 브라우저에서 직접 눈으로 확인해보자.
+
+- application.yml 설정. 데이터 확인
+
+```java
+spring:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  datasource:
+    url: jdbc:h2:mem:juwonjulog
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
 ```
 
