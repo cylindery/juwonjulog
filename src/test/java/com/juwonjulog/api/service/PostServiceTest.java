@@ -9,10 +9,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.data.domain.Sort.Direction.DESC;
 
 @SpringBootTest
 class PostServiceTest {
@@ -78,25 +83,29 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("DB에 저장된 글 여러개 조회")
-    void get_posts_saved_in_db() {
+    @DisplayName("DB에 저장된 1페이지 글 조회")
+    void get_1_page_posts_saved_in_db() {
         // given
-        postRepository.saveAll(List.of(
-                Post.builder()
-                        .title("title_1")
-                        .content("content_1")
-                        .build(),
-                Post.builder()
-                        .title("title_2")
-                        .content("content_2")
-                        .build()
-        ));
+        List<Post> requestPosts = IntStream.range(1, 31)
+                .mapToObj(i -> Post.builder()
+                        .title("title_" + i)
+                        .content("content_" + i)
+                        .build())
+                .collect(Collectors.toList());
+        postRepository.saveAll(requestPosts);
+
+        Pageable pageable = PageRequest.of(0, 5, DESC, "id");
 
         // when
-        List<PostResponse> response = postService.getList();
+        List<PostResponse> posts = postService.getList(pageable);
 
         // then
-        assertNotNull(response);
-        assertEquals(2L, response.size());
+        assertEquals(5L, posts.size());
+        assertEquals(30, posts.get(0).getId());
+        assertEquals("title_30", posts.get(0).getTitle());
+        assertEquals("content_30", posts.get(0).getContent());
+        assertEquals(26, posts.get(4).getId());
+        assertEquals("title_26", posts.get(4).getTitle());
+        assertEquals("content_26", posts.get(4).getContent());
     }
 }
