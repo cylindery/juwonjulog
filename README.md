@@ -699,9 +699,9 @@ class PostControllerTest {
 }
 ```
 
-### 여러개 조회
+### 모든 글 조회
 
-게시글을 한번에 여러개 조회하는 api를 만들어보자.  
+모든 게시글을 한번에 조회하는 api를 만들어보자.  
 단건 조회에서 Post 엔티티를 PostResponse 객체로 가져온 것과 달리, 여러개이므로 List<PostResponse> 형태로 가져와야 한다.
 
 - PostResponse 생성자 오버로딩. 서비스에서 Post 객체를 PostResponse 객체로 변환 과정에 도움
@@ -814,7 +814,7 @@ class PostControllerTest {
 
 - application.yml 설정. 데이터 확인
 
-```java
+```
 spring:
   h2:
     console:
@@ -826,5 +826,123 @@ spring:
     username: sa
     password:
     driver-class-name: org.h2.Driver
+```
+
+### Pageable 페이징 처리
+
+이전에 만든 모든 글 조회 기능은 사실 비용이 너무 많이 든다.  
+한번에 너무 많은 DB를 탐색하기도 하고, 그렇게 받은 데이터를 다시 api로 전달할 때 시간과 비용 부담되므로 페이징 기능을 추가해 수정하자.
+
+일단 간단하게 한 페이지를 조회했을 때, 최신글 순으로 5개씩 리턴하도록 구현.
+
+- PostController
+
+```java
+import org.springframework.data.domain.Pageable;
+
+public class PostController {
+
+    private final PostService postService;
+
+    @GetMapping("/posts")
+    public List<PostResponse> getList(Pageable pageable) {
+        return postService.getList(pageable);
+    }
+}
+```
+
+Pageable 인터페이스를 파라미터로 넘기면서 페이징 처리. page, sort 정보 등을 Request에 담아 서비스로 넘기기.
+
+- PostService
+
+```java
+public class PostService {
+
+    private final PostRepository postRepository;
+
+    public List<PostResponse> getList(Pageable pageable) {
+        return postRepository.findAll(pageable).stream()
+                .map(PostResponse::new)
+                .collect(Collectors.toList());
+    }
+}
+```
+
+- application.yml: 1페이지 요청을 0페이지 요청으로 변환 + 기본 페이징 갯수 5개 설정
+
+```
+spring:
+  data:
+    web:
+      pageable:
+        one-indexed-parameters: true
+        default-page-size: 5
+```
+
+- PostController 테스트 케이스. DB에 글 30개 저장
+
+```java
+class PostControllerTest {
+
+    @Test
+    @DisplayName("/posts에 getList(1) 요청 시 1페이지 글 5개 내림차순 조회")
+    void get_1_page_5_posts_desc() throws Exception {
+        // given
+        List<Post> requestPosts = IntStream.range(1, 31)
+                .mapToObj(i -> Post.builder()
+                        .title("title_" + i)
+                        .content("content_" + i)
+                        .build())
+                .collect(Collectors.toList());
+        postRepository.saveAll(requestPosts);
+
+        // expected
+        mockMvc.perform(get("/posts?page=1&sort=id,desc")
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()", is(5)))
+                .andExpect(jsonPath("$[0].id").value(30))
+                .andExpect(jsonPath("$[0].title").value("title_30"))
+                .andExpect(jsonPath("$[0].content").value("content_30"))
+                .andExpect(jsonPath("$[4].id").value(26))
+                .andExpect(jsonPath("$[4].title").value("title_26"))
+                .andExpect(jsonPath("$[4].content").value("content_26"))
+                .andDo(print());
+    }
+}
+```
+
+- PostService 테스트 케이스
+
+```java
+class PostServiceTest {
+
+    @Test
+    @DisplayName("DB에 저장된 1페이지 글 조회")
+    void get_1_page_posts_saved_in_db() {
+        // given
+        List<Post> requestPosts = IntStream.range(1, 31)
+                .mapToObj(i -> Post.builder()
+                        .title("title_" + i)
+                        .content("content_" + i)
+                        .build())
+                .collect(Collectors.toList());
+        postRepository.saveAll(requestPosts);
+
+        Pageable pageable = PageRequest.of(0, 5, DESC, "id");
+
+        // when
+        List<PostResponse> posts = postService.getList(pageable);
+
+        // then
+        assertEquals(5L, posts.size());
+        assertEquals(30, posts.get(0).getId());
+        assertEquals("title_30", posts.get(0).getTitle());
+        assertEquals("content_30", posts.get(0).getContent());
+        assertEquals(26, posts.get(4).getId());
+        assertEquals("title_26", posts.get(4).getTitle());
+        assertEquals("content_26", posts.get(4).getContent());
+    }
+}
 ```
 
