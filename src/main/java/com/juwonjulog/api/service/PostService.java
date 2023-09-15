@@ -3,10 +3,10 @@ package com.juwonjulog.api.service;
 import com.juwonjulog.api.domain.Post;
 import com.juwonjulog.api.repository.PostRepository;
 import com.juwonjulog.api.request.PostCreate;
+import com.juwonjulog.api.request.PostSearch;
 import com.juwonjulog.api.response.PostResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -39,8 +39,8 @@ public class PostService {
                 .build();
     }
 
-    public List<PostResponse> getList(Pageable pageable) {
-        return postRepository.findAll(pageable).stream()
+    public List<PostResponse> getList(PostSearch postSearch) {
+        return postRepository.getList(postSearch).stream()
                 .map(PostResponse::new)
                 .collect(Collectors.toList());
     }

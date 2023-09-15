@@ -162,8 +162,8 @@ class PostControllerTest {
     }
 
     @Test
-    @DisplayName("/posts에 getList(1) 요청 시 1페이지 글 5개 내림차순 조회")
-    void get_1_page_5_posts_desc() throws Exception {
+    @DisplayName("/posts에 1페이지 글 10개 내림차순 조회 요청")
+    void get_1_page_10_posts_desc() throws Exception {
         // given
         List<Post> requestPosts = IntStream.range(1, 31)
                 .mapToObj(i -> Post.builder()
@@ -174,16 +174,38 @@ class PostControllerTest {
         postRepository.saveAll(requestPosts);
 
         // expected
-        mockMvc.perform(get("/posts?page=1&sort=id,desc")
+        mockMvc.perform(get("/posts?page=1&size=10")
                         .contentType(APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()", is(5)))
-                .andExpect(jsonPath("$[0].id").value(30))
+                .andExpect(jsonPath("$.length()", is(10)))
                 .andExpect(jsonPath("$[0].title").value("title_30"))
                 .andExpect(jsonPath("$[0].content").value("content_30"))
-                .andExpect(jsonPath("$[4].id").value(26))
-                .andExpect(jsonPath("$[4].title").value("title_26"))
-                .andExpect(jsonPath("$[4].content").value("content_26"))
+                .andExpect(jsonPath("$[9].title").value("title_21"))
+                .andExpect(jsonPath("$[9].content").value("content_21"))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("/posts에 0페이지 조회 요청해도, 1페이지 출력")
+    void test() throws Exception {
+        // given
+        List<Post> requestPosts = IntStream.range(1, 31)
+                .mapToObj(i -> Post.builder()
+                        .title("title_" + i)
+                        .content("content_" + i)
+                        .build())
+                .collect(Collectors.toList());
+        postRepository.saveAll(requestPosts);
+
+        // expected
+        mockMvc.perform(get("/posts?page=0&size=10")
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()", is(10)))
+                .andExpect(jsonPath("$[0].title").value("title_30"))
+                .andExpect(jsonPath("$[0].content").value("content_30"))
+                .andExpect(jsonPath("$[9].title").value("title_21"))
+                .andExpect(jsonPath("$[9].content").value("content_21"))
                 .andDo(print());
     }
 }
