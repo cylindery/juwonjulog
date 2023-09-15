@@ -946,3 +946,303 @@ class PostServiceTest {
 }
 ```
 
+### Querydsl 페이징 처리
+
+앞서 Pageable 인터페이스를 사용해서 처리했던 페이징 기능을, Querydsl을 사용해서 보다 쉽게 개선해보자.  
+또한 페이징을 할 때 페이지, 한번에 가져오는 글의 갯수 등의 조건들을 요청할 수 있는 DTO 클래스도 추가.  
+우선 Querydsl은 따로 플러그인 설치가 필요하다.
+
+- build.gradle에 dependencies 추가. 이후 Gradle 리로드 /
+
+```
+dependencies {
+
+	implementation 'com.querydsl:querydsl-core'
+    implementation 'com.querydsl:querydsl-jpa'
+    annotationProcessor "com.querydsl:querydsl-apt:${dependencyManagement.importedProperties['querydsl.version']}:jpa"
+    annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
+    annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
+}
+```
+
+이후에 Gradle Tasks/build/classes 실행을 통해 엔티티 Q클래스 생성
+
+- build 폴더에서 QPost 생성 확인
+
+```java
+package com.juwonjulog.api.domain;
+
+import static com.querydsl.core.types.PathMetadataFactory.*;
+
+import com.querydsl.core.types.dsl.*;
+
+import com.querydsl.core.types.PathMetadata;
+
+import javax.annotation.processing.Generated;
+
+import com.querydsl.core.types.Path;
+
+
+/**
+ * QPost is a Querydsl query type for Post
+ */
+@Generated("com.querydsl.codegen.DefaultEntitySerializer")
+public class QPost extends EntityPathBase<Post> {
+
+    private static final long serialVersionUID = 1946354179L;
+
+    public static final QPost post = new QPost("post");
+
+    public final StringPath content = createString("content");
+
+    public final NumberPath<Long> id = createNumber("id", Long.class);
+
+    public final StringPath title = createString("title");
+
+    public QPost(String variable) {
+        super(Post.class, forVariable(variable));
+    }
+
+    public QPost(Path<? extends Post> path) {
+        super(path.getType(), path.getMetadata());
+    }
+
+    public QPost(PathMetadata metadata) {
+        super(Post.class, metadata);
+    }
+
+}
+```
+
+- QuerydslConfig 클래스. 엔티티 매니저의 영속성 컨텍스트 등록과 JpaQueryFacotry 빈 등록 설정
+
+```java
+package com.juwonjulog.api.config;
+
+import com.querydsl.jpa.impl.JPAQueryFactory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+
+@Configuration
+public class QuerydslConfig {
+
+    @PersistenceContext
+    public EntityManager em;
+
+    @Bean
+    public JPAQueryFactory jpaQueryFactory() {
+        return new JPAQueryFactory(em);
+    }
+}
+```
+
+- DTO PostSearch 클래스. 필드값이 null이면 기본값 부여
+
+```java
+package com.juwonjulog.api.request;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+
+@Getter
+@Setter
+@Builder
+public class PostSearch {
+
+    private static final int MAX_SIZE = 2000;
+
+    @Builder.Default
+    private Integer page = 1;
+
+    @Builder.Default
+    private Integer size = 10;
+
+    public long getOffset() {
+        return (long) (max(page, 1) - 1) * min(size, MAX_SIZE);
+    }
+}
+
+```
+
+한편 0페이지를 요청했을 때, 기본적으로 1페이지를 리턴할 수 있도록 설정. 그리고 최대 글 가져오는 갯수도 2000개로 제한.
+
+- PostRepositoryCustom 인터페이스
+
+```java
+package com.juwonjulog.api.repository;
+
+import com.juwonjulog.api.domain.Post;
+import com.juwonjulog.api.request.PostSearch;
+
+import java.util.List;
+
+public interface PostRepositoryCustom {
+
+    List<Post> getList(PostSearch postSearch);
+}
+```
+
+- PostRepositoryImpl 구현 클래스. Querydsl을 사용해서 페이징 메서드 구현
+
+```java
+package com.juwonjulog.api.repository;
+
+import com.juwonjulog.api.domain.Post;
+import com.juwonjulog.api.request.PostSearch;
+import com.querydsl.jpa.impl.JPAQueryFactory;
+import lombok.RequiredArgsConstructor;
+
+import java.util.List;
+
+import static com.juwonjulog.api.domain.QPost.post;
+
+@RequiredArgsConstructor
+public class PostRepositoryImpl implements PostRepositoryCustom {
+
+    private final JPAQueryFactory jpaQueryFactory;
+
+    @Override
+    public List<Post> getList(PostSearch postSearch) {
+        return jpaQueryFactory.selectFrom(post)
+                .limit(postSearch.getSize())
+                .offset(postSearch.getOffset())
+                .orderBy(post.id.desc())
+                .fetch();
+    }
+}
+```
+
+- PostRepository 인터페이스에 PostRepositoryCustom 확장
+
+```java
+package com.juwonjulog.api.repository;
+
+import com.juwonjulog.api.domain.Post;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface PostRepository extends JpaRepository<Post, Long>, PostRepositoryCustom {
+}
+```
+
+- PostController 이전 페이징 기능 수정
+
+```java
+public class PostController {
+
+    @GetMapping("/posts")
+    public List<PostResponse> getList(@ModelAttribute PostSearch postSearch) {
+        return postService.getList(postSearch);
+    }
+}
+```
+
+- PostService 이전 페이징 기능 수정
+
+```java
+public class PostService {
+
+    public List<PostResponse> getList(PostSearch postSearch) {
+        return postRepository.getList(postSearch).stream()
+                .map(PostResponse::new)
+                .collect(Collectors.toList());
+    }
+}
+```
+
+- PostController 테스트 케이스
+
+```java
+class PostControllerTest {
+
+    @Test
+    @DisplayName("/posts에 1페이지 글 10개 내림차순 조회 요청")
+    void get_1_page_10_posts_desc() throws Exception {
+        // given
+        List<Post> requestPosts = IntStream.range(1, 31)
+                .mapToObj(i -> Post.builder()
+                        .title("title_" + i)
+                        .content("content_" + i)
+                        .build())
+                .collect(Collectors.toList());
+        postRepository.saveAll(requestPosts);
+
+        // expected
+        mockMvc.perform(get("/posts?page=1&size=10")
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()", is(10)))
+                .andExpect(jsonPath("$[0].title").value("title_30"))
+                .andExpect(jsonPath("$[0].content").value("content_30"))
+                .andExpect(jsonPath("$[9].title").value("title_21"))
+                .andExpect(jsonPath("$[9].content").value("content_21"))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("/posts에 0페이지 조회 요청해도, 1페이지 출력")
+    void test() throws Exception {
+        // given
+        List<Post> requestPosts = IntStream.range(1, 31)
+                .mapToObj(i -> Post.builder()
+                        .title("title_" + i)
+                        .content("content_" + i)
+                        .build())
+                .collect(Collectors.toList());
+        postRepository.saveAll(requestPosts);
+
+        // expected
+        mockMvc.perform(get("/posts?page=0&size=10")
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()", is(10)))
+                .andExpect(jsonPath("$[0].title").value("title_30"))
+                .andExpect(jsonPath("$[0].content").value("content_30"))
+                .andExpect(jsonPath("$[9].title").value("title_21"))
+                .andExpect(jsonPath("$[9].content").value("content_21"))
+                .andDo(print());
+    }
+}
+```
+
+- PostService 테스트 케이스
+
+```java
+class PostServiceTest {
+
+    @Test
+    @DisplayName("DB에 저장된 글 1페이지 10개 조회")
+    void get_1_page_posts_saved_in_db() {
+        // given
+        List<Post> requestPosts = IntStream.range(1, 31)
+                .mapToObj(i -> Post.builder()
+                        .title("title_" + i)
+                        .content("content_" + i)
+                        .build())
+                .collect(Collectors.toList());
+        postRepository.saveAll(requestPosts);
+
+        PostSearch postSearch = PostSearch.builder()
+                .page(1)
+                .size(10)
+                .build();
+
+        // when
+        List<PostResponse> posts = postService.getList(postSearch);
+
+        // then
+        assertEquals(10L, posts.size());
+        assertEquals("title_30", posts.get(0).getTitle());
+        assertEquals("content_30", posts.get(0).getContent());
+        assertEquals("title_21", posts.get(9).getTitle());
+        assertEquals("content_21", posts.get(9).getContent());
+    }
+}
+```
+
