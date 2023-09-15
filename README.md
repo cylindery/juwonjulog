@@ -952,7 +952,7 @@ class PostServiceTest {
 또한 페이징을 할 때 페이지, 한번에 가져오는 글의 갯수 등의 조건들을 요청할 수 있는 DTO 클래스도 추가.  
 우선 Querydsl은 따로 플러그인 설치가 필요하다.
 
-- build.gradle에 dependencies 추가. 이후 Gradle 리로드 /
+- build.gradle에 dependencies 추가. 이후 Gradle 리로드
 
 ```
 dependencies {
