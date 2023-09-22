@@ -1,6 +1,7 @@
 package com.juwonjulog.api.controller;
 
 import com.juwonjulog.api.request.PostCreate;
+import com.juwonjulog.api.request.PostEdit;
 import com.juwonjulog.api.request.PostSearch;
 import com.juwonjulog.api.response.PostResponse;
 import com.juwonjulog.api.service.PostService;
@@ -31,5 +32,10 @@ public class PostController {
     @GetMapping("/posts")
     public List<PostResponse> getList(@ModelAttribute PostSearch postSearch) {
         return postService.getList(postSearch);
+    }
+
+    @PatchMapping("/posts/{postId}")
+    public void edit(@PathVariable Long postId, @RequestBody @Valid PostEdit postEdit) {
+        postService.edit(postId, postEdit);
     }
 }

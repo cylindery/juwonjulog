@@ -3,6 +3,7 @@ package com.juwonjulog.api.service;
 import com.juwonjulog.api.domain.Post;
 import com.juwonjulog.api.repository.PostRepository;
 import com.juwonjulog.api.request.PostCreate;
+import com.juwonjulog.api.request.PostEdit;
 import com.juwonjulog.api.request.PostSearch;
 import com.juwonjulog.api.response.PostResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -106,5 +107,55 @@ class PostServiceTest {
         assertEquals("content_30", posts.get(0).getContent());
         assertEquals("title_21", posts.get(9).getTitle());
         assertEquals("content_21", posts.get(9).getContent());
+    }
+
+    @Test
+    @DisplayName("글 제목 수정")
+    void edit_post_title() {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        PostEdit postEdit = PostEdit.builder()
+                .title("edited_title")
+                .content("content")
+                .build();
+
+        // when
+        postService.edit(post.getId(), postEdit);
+
+        // then
+        Post editedPost = postRepository.findById(post.getId())
+                .orElseThrow(() -> new RuntimeException("글이 존재하지 않습니다. id=" + post.getId()));
+        assertEquals("edited_title", editedPost.getTitle());
+        assertEquals("content", editedPost.getContent());
+    }
+
+    @Test
+    @DisplayName("글 내용 수정")
+    void edit_post_content() {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        PostEdit postEdit = PostEdit.builder()
+                .title("title")
+                .content("edited_content")
+                .build();
+
+        // when
+        postService.edit(post.getId(), postEdit);
+
+        // then
+        Post editedPost = postRepository.findById(post.getId())
+                .orElseThrow(() -> new RuntimeException("글이 존재하지 않습니다. id=" + post.getId()));
+        assertEquals("title", editedPost.getTitle());
+        assertEquals("edited_content", editedPost.getContent());
     }
 }

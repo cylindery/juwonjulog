@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.juwonjulog.api.domain.Post;
 import com.juwonjulog.api.repository.PostRepository;
 import com.juwonjulog.api.request.PostCreate;
+import com.juwonjulog.api.request.PostEdit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,8 +20,7 @@ import java.util.stream.IntStream;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -187,7 +187,7 @@ class PostControllerTest {
 
     @Test
     @DisplayName("/posts에 0페이지 조회 요청해도, 1페이지 출력")
-    void test() throws Exception {
+    void get_1_page_when_get_0_page_request() throws Exception {
         // given
         List<Post> requestPosts = IntStream.range(1, 31)
                 .mapToObj(i -> Post.builder()
@@ -206,6 +206,56 @@ class PostControllerTest {
                 .andExpect(jsonPath("$[0].content").value("content_30"))
                 .andExpect(jsonPath("$[9].title").value("title_21"))
                 .andExpect(jsonPath("$[9].content").value("content_21"))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("글 제목 수정 요청")
+    void edit_post_title_request() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        PostEdit postEdit = PostEdit.builder()
+                .title("edited_title")
+                .content("content")
+                .build();
+
+        String json = objectMapper.writeValueAsString(postEdit);
+
+        // expected
+        mockMvc.perform(patch("/posts/{postId}", post.getId())
+                        .contentType(APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("글 내용 수정 요청")
+    void edit_post_content_request() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        PostEdit postEdit = PostEdit.builder()
+                .title("title")
+                .content("edited_content")
+                .build();
+
+        String json = objectMapper.writeValueAsString(postEdit);
+
+        // expected
+        mockMvc.perform(patch("/posts/{postId}", post.getId())
+                        .contentType(APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
                 .andDo(print());
     }
 }
