@@ -1246,3 +1246,258 @@ class PostServiceTest {
 }
 ```
 
+## 게시글 수정
+
+이번에는 이미 저장된 게시글을 불러와서, 수정하는 기능을 추가해보자.  
+게시글 수정에는 1) 수정할 게시글의 식별 번호, 즉 DB 테이블의 primary id값이 필요하고, 2) 수정할 게시글의 내용이 필요하다.
+
+- 수정할 내용을 담아 넘기는 PostEdit 요청 클래스. 이전에 글을 등록하는 PostCreate 클래스와 거의 유사함
+
+```java
+package com.juwonjulog.api.request;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+
+import javax.validation.constraints.NotBlank;
+
+@Getter
+@Setter
+public class PostEdit {
+
+    @NotBlank(message = "타이틀을 입력해주세요.")
+    private String title;
+
+    @NotBlank(message = "콘텐츠를 입력해주세요.")
+    private String content;
+
+    @Builder
+    public PostEdit(String title, String content) {
+        this.title = title;
+        this.content = content;
+    }
+}
+
+```
+
+한편 넘겨받은 PostEdit 데이터를 수정할 Post 게시글에 저장해야 하는데, 이 과정에서 PostEditor라는 도메인 클래스를 사용해서 일종의 글 에디터 기능을 불러와 수정한다.  
+PostEditor 클래스는 수정할 수 있는 필드들에 대해서만 정의하여, 다른 사용자가 임의로 다른 필드를 수정할 수 없게 하고, 파라미터의 순서가 바뀌어도 문제 없이 수정되도록 도와줄 수 있다.
+
+- PostEditor 클래스
+
+```java
+package com.juwonjulog.api.domain;
+
+import lombok.Builder;
+import lombok.Getter;
+
+@Getter
+public class PostEditor {
+
+    private final String title;
+    private final String content;
+
+    @Builder
+    public PostEditor(String title, String content) {
+        this.title = title;
+        this.content = content;
+    }
+}
+```
+
+- Post 클래스의 에디터 진입 메서드 toEditor() 메서드 / 수정한 PostEditor 내용을 게시글에 입력하는 edit() 메서드
+
+```java
+package com.juwonjulog.api.domain;
+
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import javax.persistence.*;
+
+@Getter
+@Entity
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Post {
+
+    public PostEditor.PostEditorBuilder toEditor() {
+        return PostEditor.builder()
+                .title(this.title)
+                .content(this.content);
+    }
+
+    public void edit(PostEditor postEditor) {
+        this.title = postEditor.getTitle();
+        this.content = postEditor.getContent();
+    }
+}
+```
+
+toEditor() 메서드는 Post 객체에서 title, content와 같은 내용을 빌드하지 않은 상태로 넘기는 것이 목표.  
+이렇게 빌드되지 않은 PostEditor.PostEditorBuilder 객체는 서비스 단계에서 PostEdit 내용을 받아 새로운 내용으로 빌드하게 된다.
+
+- PostService 클래스의 글 수정 edit()
+
+```java
+package com.juwonjulog.api.service;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PostService {
+
+    @Transactional
+    public void edit(Long postId, PostEdit postEdit) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 글입니다."));
+
+        PostEditor.PostEditorBuilder editorBuilder = post.toEditor();
+
+        PostEditor postEditor = editorBuilder
+                .title(postEdit.getTitle())
+                .content(postEdit.getContent())
+                .build();
+
+        post.edit(postEditor);
+    }
+}
+```
+
+- 테스트 케이스
+
+```java
+
+@SpringBootTest
+class PostServiceTest {
+
+    @Test
+    @DisplayName("글 제목 수정")
+    void edit_post_title() {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        PostEdit postEdit = PostEdit.builder()
+                .title("edited_title")
+                .content("content")
+                .build();
+
+        // when
+        postService.edit(post.getId(), postEdit);
+
+        // then
+        Post editedPost = postRepository.findById(post.getId())
+                .orElseThrow(() -> new RuntimeException("글이 존재하지 않습니다. id=" + post.getId()));
+        assertEquals("edited_title", editedPost.getTitle());
+        assertEquals("content", editedPost.getContent());
+    }
+
+    @Test
+    @DisplayName("글 내용 수정")
+    void edit_post_content() {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        PostEdit postEdit = PostEdit.builder()
+                .title("title")
+                .content("edited_content")
+                .build();
+
+        // when
+        postService.edit(post.getId(), postEdit);
+
+        // then
+        Post editedPost = postRepository.findById(post.getId())
+                .orElseThrow(() -> new RuntimeException("글이 존재하지 않습니다. id=" + post.getId()));
+        assertEquals("title", editedPost.getTitle());
+        assertEquals("edited_content", editedPost.getContent());
+    }
+}
+```
+
+- PostController 클래스의 글 수정 라우팅
+
+```java
+
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+public class PostController {
+
+    @PatchMapping("/posts/{postId}")
+    public void edit(@PathVariable Long postId, @RequestBody @Valid PostEdit postEdit) {
+        postService.edit(postId, postEdit);
+    }
+}
+```
+
+- 테스트 케이스
+
+```java
+
+@AutoConfigureMockMvc
+@SpringBootTest
+class PostControllerTest {
+
+    @Test
+    @DisplayName("글 제목 수정 요청")
+    void edit_post_title_request() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        PostEdit postEdit = PostEdit.builder()
+                .title("edited_title")
+                .content("content")
+                .build();
+
+        String json = objectMapper.writeValueAsString(postEdit);
+
+        // expected
+        mockMvc.perform(patch("/posts/{postId}", post.getId())
+                        .contentType(APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("글 내용 수정 요청")
+    void edit_post_content_request() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        PostEdit postEdit = PostEdit.builder()
+                .title("title")
+                .content("edited_content")
+                .build();
+
+        String json = objectMapper.writeValueAsString(postEdit);
+
+        // expected
+        mockMvc.perform(patch("/posts/{postId}", post.getId())
+                        .contentType(APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andDo(print());
+    }
+}
+```
+
