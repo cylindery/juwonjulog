@@ -1501,3 +1501,86 @@ class PostControllerTest {
 }
 ```
 
+## 게시글 삭제
+
+CRUD의 마지막, 삭제 기능을 추가해보자.  
+게시글 삭제 기능은 Post의 id를 넘기는 방식으로 특정 게시글을 불러오고, 따로 바디에 어떤 내용을 담지는 않겠다.
+
+- PostService 클래스의 글 삭제 메서드 delete()
+
+```java
+public class PostService {
+
+    public void delete(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 글입니다."));
+
+        postRepository.delete(post);
+    }
+}
+```
+
+- 서비스 테스트 케이스
+
+```java
+
+@SpringBootTest
+class PostServiceTest {
+
+    @Test
+    @DisplayName("글 삭제")
+    void delete_post() {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        // when
+        postService.delete(post.getId());
+
+        // then
+        assertEquals(0, postRepository.count());
+    }
+}
+```
+
+- PostController 클래스의 글 삭제 라우팅
+
+```java
+public class PostController {
+
+    @DeleteMapping("/posts/{postId}")
+    public void delete(@PathVariable Long postId) {
+        postService.delete(postId);
+    }
+}
+```
+
+- 컨트롤러 테스트 케이스
+
+```java
+
+@SpringBootTest
+class PostControllerTest {
+
+    @Test
+    @DisplayName("글 삭제 요청")
+    void delete_post_request() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        // expected
+        mockMvc.perform(delete("/posts/{postId}", post.getId())
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andDo(print());
+    }
+}
+```
+
