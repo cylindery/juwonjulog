@@ -1584,3 +1584,106 @@ class PostControllerTest {
 }
 ```
 
+## 예외 처리
+
+지금까지 만든 게시글 조회, 수정, 삭제 기능은 존재하지 않는 게시글을 불러오면 IllegalArgumentException을 던졌다.  
+문법적으로 틀린 것은 아니지만, 클라이언트가 예외에 당면했을 때 직관적이지 못하다.  
+따라서 블로그 서비스 용도로 만든 예외를 생성해서 던져주도록 하자.
+
+### 존재하지 않는 게시글 예외 처리
+
+- PostNotFound 클래스
+
+```java
+package com.juwonjulog.api.exception;
+
+public class PostNotFound extends RuntimeException {
+
+    private static final String MESSAGE = "존재하지 않는 글입니다.";
+
+    public PostNotFound() {
+        super(MESSAGE);
+    }
+}
+```
+
+우선은 MESSAGE만 생성됨과 동시에 담기도록 생성자 처리. 이후에 필요하다면, Throwable cause까지 담을 수 있도록 코드를 추가하자.
+
+- PostService의 각 기능들 예외 처리 수정
+
+```java
+public class PostService {
+
+    public PostResponse get(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(PostNotFound::new);
+
+        return PostResponse.builder()
+                .id(post.getId())
+                .title(post.getTitle())
+                .content(post.getContent())
+                .build();
+    }
+
+    public void edit(Long postId, PostEdit postEdit) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(PostNotFound::new);
+
+        PostEditor.PostEditorBuilder editorBuilder = post.toEditor();
+
+        PostEditor postEditor = editorBuilder
+                .title(postEdit.getTitle())
+                .content(postEdit.getContent())
+                .build();
+
+        post.edit(postEditor);
+    }
+
+    public void delete(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(PostNotFound::new);
+
+        postRepository.delete(post);
+    }
+}
+```
+
+- 테스트 케이스
+
+```java
+
+@SpringBootTest
+class PostServiceTest {
+
+    @Test
+    @DisplayName("DB에 존재하지 않는 게시글 단건 조회 시 예외 출력")
+    void get_not_exists_post() {
+        // expected
+        Throwable exception = assertThrows(PostNotFound.class, () -> postService.get(1L));
+        assertEquals("존재하지 않는 글입니다.", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("DB에 존재하지 않는 게시글 수정 시 예외 출력")
+    void edit_not_exists_post() {
+        // given
+        PostEdit postEdit = PostEdit.builder()
+                .title("edited_title")
+                .content("edited_content")
+                .build();
+
+        // expected
+        Throwable exception = assertThrows(PostNotFound.class, () -> postService.edit(1L, postEdit));
+        assertEquals("존재하지 않는 글입니다.", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("DB에 존재하지 않는 게시글 삭제 시 예외 출력")
+    void delete_not_exists_post() {
+        // expected
+        Throwable exception = assertThrows(PostNotFound.class, () -> postService.delete(1L));
+        assertEquals("존재하지 않는 글입니다.", exception.getMessage());
+    }
+}
+```
+
