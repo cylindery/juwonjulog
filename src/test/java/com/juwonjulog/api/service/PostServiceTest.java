@@ -1,6 +1,7 @@
 package com.juwonjulog.api.service;
 
 import com.juwonjulog.api.domain.Post;
+import com.juwonjulog.api.exception.PostNotFound;
 import com.juwonjulog.api.repository.PostRepository;
 import com.juwonjulog.api.request.PostCreate;
 import com.juwonjulog.api.request.PostEdit;
@@ -33,7 +34,7 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("글 작성 요청 시 DB에 Post 데이터 저장")
+    @DisplayName("게시글 작성 시 DB에 Post 데이터 저장")
     void save_post_to_db_when_write() {
         // given
         PostCreate postCreate = PostCreate.builder()
@@ -50,20 +51,9 @@ class PostServiceTest {
         assertEquals("글 제목", post.getTitle());
         assertEquals("글 내용...", post.getContent());
     }
-    
-    @Test
-    @DisplayName("DB에 존재하지 않는 글 1개 조회 시 예외 출력")
-    void get_not_exist_post() {
-        // given
-        Long postId = 1L;
-        
-        // expected
-        Throwable exception = assertThrows(IllegalArgumentException.class, () -> postService.get(postId));
-        assertEquals("존재하지 않는 글입니다.", exception.getMessage());
-    }
 
     @Test
-    @DisplayName("DB에 저장된 글 1개 조회")
+    @DisplayName("DB에 저장된 게시글 단건 조회")
     void get_post_saved_in_db() {
         // given
         Post savedPost = Post.builder()
@@ -82,8 +72,16 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("DB에 저장된 글 1페이지 10개 조회")
-    void get_1_page_posts_saved_in_db() {
+    @DisplayName("DB에 존재하지 않는 게시글 단건 조회 시 예외 출력")
+    void get_not_exists_post() {
+        // expected
+        Throwable exception = assertThrows(PostNotFound.class, () -> postService.get(1L));
+        assertEquals("존재하지 않는 글입니다.", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("DB에 저장된 게시글 1페이지 10개 조회")
+    void get_1_page_10_posts_saved_in_db() {
         // given
         List<Post> requestPosts = IntStream.range(1, 31)
                 .mapToObj(i -> Post.builder()
@@ -110,7 +108,7 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("글 제목 수정")
+    @DisplayName("게시글 제목 수정")
     void edit_post_title() {
         // given
         Post post = Post.builder()
@@ -129,13 +127,13 @@ class PostServiceTest {
 
         // then
         Post editedPost = postRepository.findById(post.getId())
-                .orElseThrow(() -> new RuntimeException("글이 존재하지 않습니다. id=" + post.getId()));
+                .orElseThrow(() -> new RuntimeException("존재하지 않는 글입니다. id=" + post.getId()));
         assertEquals("edited_title", editedPost.getTitle());
         assertEquals("content", editedPost.getContent());
     }
 
     @Test
-    @DisplayName("글 내용 수정")
+    @DisplayName("게시글 내용 수정")
     void edit_post_content() {
         // given
         Post post = Post.builder()
@@ -154,13 +152,27 @@ class PostServiceTest {
 
         // then
         Post editedPost = postRepository.findById(post.getId())
-                .orElseThrow(() -> new RuntimeException("글이 존재하지 않습니다. id=" + post.getId()));
+                .orElseThrow(() -> new RuntimeException("존재하지 않는 글입니다. id=" + post.getId()));
         assertEquals("title", editedPost.getTitle());
         assertEquals("edited_content", editedPost.getContent());
     }
 
     @Test
-    @DisplayName("글 삭제")
+    @DisplayName("DB에 존재하지 않는 게시글 수정 시 예외 출력")
+    void edit_not_exists_post() {
+        // given
+        PostEdit postEdit = PostEdit.builder()
+                .title("edited_title")
+                .content("edited_content")
+                .build();
+
+        // expected
+        Throwable exception = assertThrows(PostNotFound.class, () -> postService.edit(1L, postEdit));
+        assertEquals("존재하지 않는 글입니다.", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("게시글 삭제")
     void delete_post() {
         // given
         Post post = Post.builder()
@@ -174,5 +186,13 @@ class PostServiceTest {
 
         // then
         assertEquals(0, postRepository.count());
+    }
+
+    @Test
+    @DisplayName("DB에 존재하지 않는 게시글 삭제 시 예외 출력")
+    void delete_not_exists_post() {
+        // expected
+        Throwable exception = assertThrows(PostNotFound.class, () -> postService.delete(1L));
+        assertEquals("존재하지 않는 글입니다.", exception.getMessage());
     }
 }
