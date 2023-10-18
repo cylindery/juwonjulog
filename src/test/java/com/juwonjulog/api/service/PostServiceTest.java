@@ -73,7 +73,7 @@ class PostServiceTest {
 
     @Test
     @DisplayName("DB에 존재하지 않는 게시글 단건 조회 시 예외 출력")
-    void get_not_exists_post() {
+    void get_nonexistent_post() {
         // expected
         Throwable exception = assertThrows(PostNotFound.class, () -> postService.get(1L));
         assertEquals("존재하지 않는 글입니다.", exception.getMessage());
@@ -159,7 +159,7 @@ class PostServiceTest {
 
     @Test
     @DisplayName("DB에 존재하지 않는 게시글 수정 시 예외 출력")
-    void edit_not_exists_post() {
+    void edit_nonexistent_post() {
         // given
         PostEdit postEdit = PostEdit.builder()
                 .title("edited_title")
@@ -190,7 +190,7 @@ class PostServiceTest {
 
     @Test
     @DisplayName("DB에 존재하지 않는 게시글 삭제 시 예외 출력")
-    void delete_not_exists_post() {
+    void delete_nonexistent_post() {
         // expected
         Throwable exception = assertThrows(PostNotFound.class, () -> postService.delete(1L));
         assertEquals("존재하지 않는 글입니다.", exception.getMessage());
