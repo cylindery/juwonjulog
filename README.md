@@ -1687,3 +1687,247 @@ class PostServiceTest {
 }
 ```
 
+### 비즈니스 최상위 예외 클래스
+
+지난번에 만든 게시글 예외 처리는 게시글을 조회, 수정, 삭제할 때 존재하지 않는 게시글을 불러올 때만 발생시키는 예외 처리였다.  
+그리고 서비스 단계에서만 예외 테스트 코드를 짰었는데, 컨트롤러 단계에서도 이 예외 처리를 적용하려면 이전에 만든 ExceptionController 클래스에 ExceptionHandler를 또 추가해줘야 한다.
+
+한편 과연 앞으로도 블로그 기능을 추가하다보면 이 존재하지 않는 예외 처리만 존재할까? 계속해서 다양한 방식의 예외 처리가 필요할 것이다.  
+그러므로 그때마다 ExceptionController에 메서드 별로 하나하나 추가해줘야 하는 번거로움이 생긴다.  
+같은 비즈니스 클래스에 해당한다면, 최상위 예외 클래스로 추상 클래스를 만든 뒤 이를 상속하는 방식으로 예외 클래스들을 만들어보자.
+
+- JuwonjulogException 클래스: 최상위 블로그 비즈니스 예외 클래스
+
+```java
+package com.juwonjulog.api.exception;
+
+import lombok.Getter;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Getter
+public abstract class JuwonjulogException extends RuntimeException {
+
+    public final Map<String, String> validation = new HashMap<>();
+
+    public JuwonjulogException(String message) {
+        super(message);
+    }
+
+    public JuwonjulogException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public abstract int getStatusCode();
+
+    public void addValidation(String fieldName, String message) {
+        validation.put(fieldName, message);
+    }
+}
+```
+
+Exception의 메시지를 기본 생성자로 받으며, 예외 클래스 별로 상태 코드와 validation 값을 넣을 수 있는 메서드를 추가.
+
+- PostNotFound 클래스: 존재하지 않는 게시글 예외 처리
+
+```java
+package com.juwonjulog.api.exception;
+
+public class PostNotFound extends JuwonjulogException {
+
+    private static final String MESSAGE = "존재하지 않는 글입니다.";
+
+    public PostNotFound() {
+        super(MESSAGE);
+    }
+
+    @Override
+    public int getStatusCode() {
+        return 404;
+    }
+}
+```
+
+- InvalidRequest 클래스: 클라이언트의 잘못된 요청 예외 처리
+
+```java
+package com.juwonjulog.api.exception;
+
+public class InvalidRequest extends JuwonjulogException {
+
+    private static final String MESSAGE = "잘못된 요청입니다.";
+
+    public InvalidRequest() {
+        super(MESSAGE);
+    }
+
+    public InvalidRequest(String fieldName, String message) {
+        super(MESSAGE);
+        addValidation(fieldName, message);
+    }
+
+    @Override
+    public int getStatusCode() {
+        return 400;
+    }
+}
+```
+
+클라이언트에 예외가 터졌을 때, 구체적 이유를 알 수 있는 validation 값을 넣어준다.
+
+- PostCreate 클래스: 게시글 작성 시 제목에 욕을 넣을 수 없도록 제한
+
+```java
+package com.juwonjulog.api.request;
+
+public class PostCreate {
+
+    @NotBlank(message = "제목을 입력해주세요.")
+    private String title;
+
+    @NotBlank(message = "내용을 입력해주세요.")
+    private String content;
+
+    @Builder
+    public PostCreate(String title, String content) {
+        this.title = title;
+        this.content = content;
+    }
+
+    public void validate() {
+        if (title.contains("욕")) {
+            throw new InvalidRequest("title", "제목에 욕을 포함할 수 없습니다.");
+        }
+    }
+}
+```
+
+- PostController 클래스: 게시글 작성 시 제목에 욕이 들어갔는지 검증
+
+```java
+public class PostController {
+
+    @PostMapping("/posts")
+    public void post(@RequestBody @Valid PostCreate request) {
+        request.validate();
+        postService.write(request);
+    }
+}
+```
+
+- ExceptionController 클래스: 최상위 비즈니스 예외 클래스 잡아주기
+
+```java
+
+@ControllerAdvice
+public class ExceptionController {
+
+    @ResponseBody
+    @ExceptionHandler(JuwonjulogException.class)
+    public ResponseEntity<ErrorResponse> juwonjulogExceptionHandler(JuwonjulogException e) {
+        int statusCode = e.getStatusCode();
+
+        ErrorResponse body = ErrorResponse.builder()
+                .code(String.valueOf(statusCode))
+                .message(e.getMessage())
+                .validation(e.getValidation())
+                .build();
+
+        return ResponseEntity.status(statusCode).body(body);
+    }
+}
+```
+
+비즈니스 예외가 터졌을 때, 각 비즈니스 예외의 statusCode와 message를 직접 가져와 body에 삽입.  
+그리고 validation 필드와 값이 있다면, validation까지 넣어준다.
+
+- ErrorResponse 클래스: 생성자에 validation 값을 넣어주도록 코드 수정. validation이 없으면 생성해서 주입
+
+```java
+public class ErrorResponse {
+
+    private final String code;
+    private final String message;
+    private final Map<String, String> validation;
+
+    @Builder
+    public ErrorResponse(String code, String message, Map<String, String> validation) {
+        this.code = code;
+        this.message = message;
+        this.validation = validation != null ? validation : new HashMap<>();
+    }
+}
+```
+
+- PostController 테스트 케이스
+
+```java
+
+@AutoConfigureMockMvc
+@SpringBootTest
+class PostControllerTest {
+
+    @Test
+    @DisplayName("게시글 작성 시 제목에 욕 제한")
+    void restrict_swear_word_in_title_when_post() throws Exception {
+        // given
+        PostCreate request = PostCreate.builder()
+                .title("title_욕")
+                .content("content")
+                .build();
+
+        String json = objectMapper.writeValueAsString(request);
+
+        // expected
+        mockMvc.perform(post("/posts")
+                        .contentType(APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"))
+                .andExpect(jsonPath("$.message").value("잘못된 요청입니다."))
+                .andExpect(jsonPath("$.validation.title").value("제목에 욕을 포함할 수 없습니다."))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 게시글 단건 조회")
+    void get_nonexistent_post() throws Exception {
+        // expected
+        mockMvc.perform(get("/posts/{postId}", 1L)
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 게시글 수정")
+    void edit_nonexistent_post() throws Exception {
+        // given
+        PostEdit postEdit = PostEdit.builder()
+                .title("edited_title")
+                .content("edited_content")
+                .build();
+
+        String json = objectMapper.writeValueAsString(postEdit);
+
+        // expected
+        mockMvc.perform(patch("/posts/{postId}", 1L)
+                        .contentType(APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isNotFound())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 게시글 삭제")
+    void delete_nonexistent_post() throws Exception {
+        // expected
+        mockMvc.perform(delete("/posts/{postId}", 1L)
+                        .contentType(APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andDo(print());
+    }
+}
+```
+
