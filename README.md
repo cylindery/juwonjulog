@@ -1931,3 +1931,137 @@ class PostControllerTest {
 }
 ```
 
+## Spring REST Docs 문서화
+
+### 기본 설정
+
+지금까지 만든 api를 처음 접한 클라이언트는 어떤 기능이 있는지 모른다.  
+그러므로 나중에 애플리케이션을 완성한 뒤, api를 사용하는 클라이언트에게 기능을 간단히 설명하기 위한 문서를 만들기 위해 Spring REST Docs를 사용한다.
+
+Spring REST Docs는 운영 코드에 영향을 주지 않고, 변경된 기능에 대해 최신화된 문서 유지가 가능하다는 장점이 있다.  
+테스트 케이스를 실행하고, 통과해야 자동으로 라우팅 규칙을 파싱해서 문서화해주기 때문에 매우 편리하다.
+
+- build.gradle에 Spring REST Docs 2.0.7.RELEASE 설정
+
+```
+plugins { 
+	id "org.asciidoctor.jvm.convert" version "3.3.2"
+}
+
+configurations {
+	asciidoctorExt 
+}
+
+ext { 
+	asciidocVersion = "2.0.7.RELEASE"
+	snippetsDir = file('build/generated-snippets')
+}
+
+dependencies {
+    asciidoctorExt "org.springframework.restdocs:spring-restdocs-asciidoctor:${asciidocVersion}"
+    testImplementation "org.springframework.restdocs:spring-restdocs-mockmvc:${asciidocVersion}"
+}
+
+test { 
+	outputs.dir snippetsDir
+}
+
+asciidoctor { 
+	inputs.dir snippetsDir 
+	configurations 'asciidoctorExt' 
+	dependsOn test 
+}
+```
+
+또한 나중에 빌드를 통해 최종적으로 애플리케이션에 대한 jar를 생성할 때, asciidoc도 같이 포함되도록 설정했다.  
+이후에 별도의 docs를 위한 컨트롤러 테스트를 만들어 Junit 5 기반 테스트를 실행해보자.
+
+- PostControllerDocTest 게시글 단건 조회 테스트 케이스
+
+```java
+package com.juwonjulog.api.controller;
+
+import com.juwonjulog.api.domain.Post;
+import com.juwonjulog.api.repository.PostRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.restdocs.RestDocumentationContextProvider;
+import org.springframework.restdocs.RestDocumentationExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
+
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.documentationConfiguration;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@ExtendWith(RestDocumentationExtension.class)
+public class PostControllerDocTest {
+
+    private MockMvc mockMvc;
+
+    @Autowired
+    private PostRepository postRepository;
+
+    @BeforeEach
+    void setUp(WebApplicationContext webApplicationContext, RestDocumentationContextProvider restDocumentation) {
+        this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
+                .apply(documentationConfiguration(restDocumentation))
+                .build();
+    }
+
+    @Test
+    @DisplayName("게시글 단건 조회")
+    void get_post() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        // expected
+        mockMvc.perform(get("/posts/{postId}", post.getId())
+                        .accept(APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andDo(document("index"));
+    }
+}
+```
+
+앞선 설정으로 빌드한 뒤, 테스트 케이스가 통과하면, 통과한 결과에 따라 자동으로 build/generated-snippets/index 폴더에 여러가지 asciidoc 문서들이 생성된다.
+
+이렇게 빌드한 adoc 파일들은 웹 서버가 띄워질 때, html로 변환되고 같이 빌드된다. 그리고 그 결과를 클라이언트가 볼 수 있도록 설정해줘야 한다. 즉, 스니펫을 하나의 html로 모아주는 작업이 필요.
+
+- src/docs/asciidocs/index.adoc: 스니펫을 하나로 모아 사용
+
+```
+= 주원주로그
+:toc:
+
+== 게시글 단건 조회
+
+=== 요청
+
+include::{snippets}/index/http-request.adoc[]
+
+=== 응답
+
+include::{snippets}/index/http-response.adoc[]
+
+=== CURL
+
+include::{snippets}/index/curl-request.adoc[]
+```
+
+이후에 빌드하면, 위의 index.adoc 파일을 기반으로 만든 html 결과물이 build/docs/asciidocs에 생성된다.  
+이렇게 생성된 결과는 웹 서버를 띄워서 확인. -> localhost:8080/docs.index.html
