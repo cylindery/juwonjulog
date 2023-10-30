@@ -2065,3 +2065,94 @@ include::{snippets}/index/curl-request.adoc[]
 
 이후에 빌드하면, 위의 index.adoc 파일을 기반으로 만든 html 결과물이 build/docs/asciidocs에 생성된다.  
 이렇게 생성된 결과는 웹 서버를 띄워서 확인. -> localhost:8080/docs.index.html
+
+### 요청, 응답 필드 추가
+
+이전에 기본으로 만든 Spring REST Docs 문서를 좀 더 구체적으로 보완해보자.
+
+- 요청 Host 수정
+
+```
+@AutoConfigureRestDocs(uriScheme = "https", uriHost = "api.juwonjulog.com", uriPort = 443)
+```
+
+- 게시글 작성 테스트 케이스 추가, 요청 파라미터 추가
+
+```java
+public class PostControllerDocTest {
+
+    @Test
+    @DisplayName("게시글 작성")
+    void post() throws Exception {
+        // given
+        PostCreate postCreate = PostCreate.builder()
+                .title("title")
+                .content("content")
+                .build();
+
+        String json = objectMapper.writeValueAsString(postCreate);
+
+        // expected
+        mockMvc.perform(RestDocumentationRequestBuilders.post("/posts")
+                        .contentType(APPLICATION_JSON)
+                        .accept(APPLICATION_JSON)
+                        .content(json))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andDo(document("index",
+                        requestFields(
+                                fieldWithPath("title").description("게시글 제목"),
+                                fieldWithPath("content").description("게시글 내용"))
+                ));
+    }
+}
+```
+
+- 게시글 단건 조회 테스트 케이스 파라미터 추가
+
+```java
+public class PostControllerDocTest {
+
+    @Test
+    @DisplayName("게시글 단건 조회")
+    void get_post() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        // expected
+        mockMvc.perform(get("/posts/{postId}", post.getId())
+                        .accept(APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andDo(document("index",
+                        pathParameters(
+                                parameterWithName("postId").description("게시글 ID")),
+                        responseFields(
+                                fieldWithPath("id").description("게시글 ID"),
+                                fieldWithPath("title").description("게시글 제목"),
+                                fieldWithPath("content").description("게시글 내용"))
+                ));
+    }
+}
+```
+
+위의 두 테스트를 통과한 뒤, 빌드하면 스니펫에 path-parameters.adoc, request-fields.adoc, response-fields.adoc 파일이 추가된다.  
+이러한 스니펫들을 새로 index.adoc에 추가하자.
+
+- index.adoc
+
+```
+=== 요청
+
+include::{snippets}/index/path-parameters.adoc[]
+
+include::{snippets}/index/request-fields.adoc[]
+
+=== 응답
+
+include::{snippets}/index/response-fields.adoc[]
+```
