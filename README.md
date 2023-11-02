@@ -2156,3 +2156,131 @@ include::{snippets}/index/request-fields.adoc[]
 
 include::{snippets}/index/response-fields.adoc[]
 ```
+
+### 커스터마이징
+
+게시글 작성과 게시글 단건 조회의 구체적인 adoc 파일을 구분하자.  
+이를 위해선 기존의 PostControllerDocTest 클래스에서 테스트를 수정하면 된다.
+
+- PostControllerDocTest
+
+```java
+public class PostControllerDocTest {
+
+    @Test
+    @DisplayName("게시글 작성")
+    void post() throws Exception {
+        // given
+        PostCreate postCreate = PostCreate.builder()
+                .title("title")
+                .content("content")
+                .build();
+
+        String json = objectMapper.writeValueAsString(postCreate);
+
+        // expected
+        mockMvc.perform(RestDocumentationRequestBuilders.post("/posts")
+                        .contentType(APPLICATION_JSON)
+                        .accept(APPLICATION_JSON)
+                        .content(json))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andDo(document("post-create",
+                        requestFields(
+                                fieldWithPath("title").description("게시글 제목")
+                                        .attributes(key("constraint").value("제목에 바르고 고운 말을 사용해주세요.")),
+                                fieldWithPath("content").description("게시글 내용").optional())
+                ));
+    }
+
+    @Test
+    @DisplayName("게시글 단건 조회")
+    void get_post() throws Exception {
+        // given
+        Post post = Post.builder()
+                .title("title")
+                .content("content")
+                .build();
+        postRepository.save(post);
+
+        // expected
+        mockMvc.perform(get("/posts/{postId}", post.getId())
+                        .accept(APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andDo(document("post-inquiry",
+                        pathParameters(
+                                parameterWithName("postId").description("게시글 ID")),
+                        responseFields(
+                                fieldWithPath("id").description("게시글 ID"),
+                                fieldWithPath("title").description("게시글 제목"),
+                                fieldWithPath("content").description("게시글 내용"))
+                ));
+    }
+}
+```
+
+- src/test/resources/org/springframework/restdocs/templates/asciidoctor 경로의 request-fields.snippet
+
+```java
+|===
+        |Path|Type|Description|Optional|Constraint
+
+        {{#fields}}
+        |{{path}}
+        |{{type}}
+        |{{description}}
+        |{{#optional}}Y{{/optional}}
+        |{{#constraint}}{{.}}{{/constraint}}
+        {{/fields}}
+        |===
+
+```
+
+위의 두 테스트를 통과한 뒤, 빌드하면 스니펫에 path-parameters.adoc, request-fields.adoc, response-fields.adoc 파일이 추가된다.  
+이러한 스니펫들을 새로 index.adoc에 추가하자.
+
+우선 게시글 작성 테스트는 "post-create" 경로로 adoc 파일들을 생성하도록 수정하였다. 또한 게시글 제목은 욕설을 쓰지 않도록 constraint 항목을 넣어주었고, 게시글 내용은 필수 항목이 아니라는
+Optional 삽입. 다음으로 게시글 조회 테스트는 "post-inquiry" 경로로 adoc 파일 생성.
+
+이렇게 수정한 테스트를 asciidoctor 통과하고 나면, 자동으로 build 디렉토리에 수정된 adoc 파일이 생성된다.
+
+- index.adoc
+
+```
+= 주원주로그
+:doctype: book
+:icons: font
+:source-highlighter: highlightjs
+:toc: left
+:toclevels: 2
+:sectlinks:
+
+== 게시글 작성
+
+=== 요청
+
+include::{snippets}/post-create/http-request.adoc[]
+
+include::{snippets}/post-create/request-fields.adoc[]
+
+=== 응답
+
+include::{snippets}/post-create/http-response.adoc[]
+
+== 게시글 단건 조회
+
+=== 요청
+
+include::{snippets}/post-inquiry/http-request.adoc[]
+
+include::{snippets}/post-inquiry/path-parameters.adoc[]
+
+=== 응답
+
+include::{snippets}/post-inquiry/http-response.adoc[]
+
+include::{snippets}/post-inquiry/response-fields.adoc[]
+
+```
+
