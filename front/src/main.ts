@@ -7,6 +7,8 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 
+import 'normalize.css'
+
 import 'bootstrap/dist/css/bootstrap-utilities.css'
 
 const app = createApp(App)
