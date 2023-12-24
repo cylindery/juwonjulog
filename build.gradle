@@ -63,10 +63,16 @@ asciidoctor {
 }
 
 bootJar {
+    enabled = true
+
     dependsOn asciidoctor
 
     copy {
         from asciidoctor.outputDir
         into "src/main/resources/static/docs"
     }
+}
+
+jar {
+    enabled = false
 }
